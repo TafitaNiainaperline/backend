@@ -8,9 +8,13 @@ const router = express.Router();
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const lessonResult = await pool.query(`
-      SELECT l.*, s.course_id
+      SELECT l.*, s.course_id,
+             q.id AS quiz_id,
+             LAG(l.id) OVER (ORDER BY s.order_index, l.order_index) AS prev_lesson_id,
+             LEAD(l.id) OVER (ORDER BY s.order_index, l.order_index) AS next_lesson_id
       FROM lessons l
       JOIN sections s ON l.section_id = s.id
+      LEFT JOIN quizzes q ON l.id = q.lesson_id
       WHERE l.id = $1
     `, [req.params.id]);
 
@@ -34,7 +38,13 @@ router.get('/:id', authenticate, async (req, res) => {
       [req.user.id, req.params.id]
     );
 
-    res.json({ ...lesson, progress: progress.rows[0] || null });
+    res.json({ 
+      ...lesson, 
+      progress: progress.rows[0] || null,
+      quiz_id: lesson.quiz_id,
+      prev_lesson_id: lesson.prev_lesson_id,
+      next_lesson_id: lesson.next_lesson_id
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });

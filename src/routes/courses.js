@@ -74,11 +74,13 @@ router.get('/:slug', async (req, res) => {
                  'title', l.title,
                  'duration_minutes', l.duration_minutes,
                  'is_preview', l.is_preview,
-                 'order_index', l.order_index
+                 'order_index', l.order_index,
+                 'has_quiz', CASE WHEN q.id IS NOT NULL THEN TRUE ELSE FALSE END
                ) ORDER BY l.order_index
              ) FILTER (WHERE l.id IS NOT NULL) AS lessons
       FROM sections s
       LEFT JOIN lessons l ON s.id = l.section_id
+      LEFT JOIN quizzes q ON l.id = q.lesson_id
       WHERE s.course_id = $1
       GROUP BY s.id
       ORDER BY s.order_index

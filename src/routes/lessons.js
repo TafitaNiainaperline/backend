@@ -5,7 +5,13 @@ const { authenticate } = require('../middleware/auth');
 const router = express.Router();
 
 // GET /api/lessons/:id — détail d'une leçon (requiert inscription)
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', async (req, res) => {
+  const { id } = req.params;
+  
+  if (!id || id === 'undefined') {
+    return res.status(400).json({ message: 'ID de lecon invalide' });
+  }
+  
   try {
     const lessonResult = await pool.query(`
       SELECT l.*, s.course_id,
@@ -18,36 +24,61 @@ router.get('/:id', authenticate, async (req, res) => {
       WHERE l.id = $1
     `, [req.params.id]);
 
-    if (lessonResult.rows.length === 0) return res.status(404).json({ message: 'Leçon introuvable' });
+    if (lessonResult.rows.length === 0) return res.status(404).json({ message: 'Lecon introuvable' });
 
     const lesson = lessonResult.rows[0];
 
-    if (!lesson.is_preview) {
-      const enrolled = await pool.query(
-        'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
-        [req.user.id, lesson.course_id]
-      );
-      if (enrolled.rows.length === 0) {
-        return res.status(403).json({ message: 'Inscription requise' });
+    // Check if it's a preview lesson - allow without authentication
+    const isPreview = lesson.is_preview;
+    
+    // For non-preview lessons, check authentication and enrollment
+    if (!isPreview) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'Vous devez etre conecte pour acceder a cette lecon' });
+      }
+      
+      const jwt = require('jsonwebtoken');
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+        
+        const enrolled = await pool.query(
+          'SELECT id FROM enrollments WHERE user_id = $1 AND course_id = $2',
+          [decoded.id, lesson.course_id]
+        );
+        if (enrolled.rows.length === 0) {
+          return res.status(403).json({ message: 'Vous devez etre inscrit au cours pour acceder a cette lecon' });
+        }
+        
+        // Get progress
+        const progress = await pool.query(
+          'SELECT * FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
+          [decoded.id, req.params.id]
+        );
+        
+        return res.json({ 
+          ...lesson, 
+          progress: progress.rows[0] || null,
+          quiz_id: lesson.quiz_id,
+          prev_lesson_id: lesson.prev_lesson_id,
+          next_lesson_id: lesson.next_lesson_id
+        });
+      } catch (jwtErr) {
+        return res.status(401).json({ message: 'Token invalide ou expire' });
       }
     }
 
-    // Progression de l'utilisateur sur cette leçon
-    const progress = await pool.query(
-      'SELECT * FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2',
-      [req.user.id, req.params.id]
-    );
-
+    // For preview lessons - no authentication required
     res.json({ 
       ...lesson, 
-      progress: progress.rows[0] || null,
+      progress: null,
       quiz_id: lesson.quiz_id,
       prev_lesson_id: lesson.prev_lesson_id,
       next_lesson_id: lesson.next_lesson_id
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('Lesson API error:', err);
+    res.status(500).json({ message: 'Erreur serveur: ' + err.message });
   }
 });
 
@@ -65,10 +96,38 @@ router.post('/:id/progress', authenticate, async (req, res) => {
       RETURNING *
     `, [req.user.id, req.params.id, watched_seconds || 0, is_completed || false, is_completed ? new Date() : null]);
 
+    if (is_completed) {
+      const lessonResult = await pool.query(`
+        SELECT l.id, l.title, s.course_id, c.title as course_title
+        FROM lessons l
+        JOIN sections s ON l.section_id = s.id
+        JOIN courses c ON s.course_id = c.id
+        WHERE l.id = $1
+      `, [req.params.id]);
+
+      if (lessonResult.rows.length > 0) {
+        const { course_id, title: lesson_title } = lessonResult.rows[0];
+        
+        const existingCert = await pool.query(
+          'SELECT * FROM certificates WHERE user_id = $1 AND course_id = $2',
+          [req.user.id, course_id]
+        );
+
+        if (existingCert.rows.length === 0) {
+          const certNumber = 'CERT-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+          
+          await pool.query(
+            `INSERT INTO certificates (user_id, course_id, certificate_number) VALUES ($1, $2, $3)`,
+            [req.user.id, course_id, certNumber]
+          );
+        }
+      }
+    }
+
     res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('Progress API error:', err);
+    res.status(500).json({ message: 'Erreur serveur: ' + err.message });
   }
 });
 

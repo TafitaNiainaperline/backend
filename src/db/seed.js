@@ -205,6 +205,139 @@ const seed = async () => {
       }
     }
 
+    // Create quizzes for lessons
+    const jsLessonsResult = await client.query(`
+      SELECT l.id, l.title, c.id as course_id 
+      FROM lessons l 
+      JOIN sections s ON l.section_id = s.id 
+      JOIN courses c ON s.course_id = c.id 
+      WHERE c.slug = 'javascript-complet' 
+      ORDER BY s.order_index, l.order_index 
+      LIMIT 5
+    `);
+
+    for (const lesson of jsLessonsResult.rows) {
+      const quizResult = await client.query(`
+        INSERT INTO quizzes (lesson_id, course_id, title, passing_score)
+        VALUES ($1, $2, $3, 70)
+        RETURNING id
+      `, [lesson.id, lesson.course_id, `Quiz: ${lesson.title}`]);
+      
+      const quizId = quizResult.rows[0].id;
+
+      // Add 3 questions per quiz
+      const questions = [
+        { text: `Quelle est la bonne syntaxe pour déclarer une variable en JavaScript?`, options: ['var x = 5', 'variable x = 5', 'let x := 5', 'int x = 5'], correct: 0 },
+        { text: 'Comment écrire un commentaire en JavaScript?', options: ['// commentaire', '<!-- commentaire -->', '# commentaire', '** commentaire **'], correct: 0 },
+        { text: 'Quelle méthode permet dafficher quelque chose dans la console?', options: ['console.log()', 'print()', 'echo()', 'write()'], correct: 0 },
+      ];
+
+      for (let q = 0; q < questions.length; q++) {
+        const questionResult = await client.query(`
+          INSERT INTO questions (quiz_id, question_text, order_index)
+          VALUES ($1, $2, $3)
+          RETURNING id
+        `, [quizId, questions[q].text, q]);
+        
+        const questionId = questionResult.rows[0].id;
+
+        for (let o = 0; o < questions[q].options.length; o++) {
+          await client.query(`
+            INSERT INTO answer_options (question_id, option_text, is_correct, order_index)
+            VALUES ($1, $2, $3, $4)
+          `, [questionId, questions[q].options[o], o === questions[q].correct, o]);
+        }
+      }
+    }
+
+    // Create quizzes for React course
+    const reactLessonsResult = await client.query(`
+      SELECT l.id, l.title, c.id as course_id 
+      FROM lessons l 
+      JOIN sections s ON l.section_id = s.id 
+      JOIN courses c ON s.course_id = c.id 
+      WHERE c.slug = 'react-nextjs' 
+      ORDER BY s.order_index, l.order_index 
+      LIMIT 5
+    `);
+
+    for (const lesson of reactLessonsResult.rows) {
+      const quizResult = await client.query(`
+        INSERT INTO quizzes (lesson_id, course_id, title, passing_score)
+        VALUES ($1, $2, $3, 70)
+        RETURNING id
+      `, [lesson.id, lesson.course_id, `Quiz: ${lesson.title}`]);
+      
+      const quizId = quizResult.rows[0].id;
+
+      const questions = [
+        { text: 'Quest-ce que JSX?', options: ['Une extension de syntaxe JavaScript', 'Un langage de programmation', 'Un framework', 'Une base de données'], correct: 0 },
+        { text: 'Quelle commande crée un nouveau projet React?', options: ['npx create-react-app', 'npm new react', 'react init', 'node react'], correct: 0 },
+        { text: 'Quel hook permet de gérer un état dans un composant?', options: ['useState', 'useEffect', 'useContext', 'useReducer'], correct: 0 },
+      ];
+
+      for (let q = 0; q < questions.length; q++) {
+        const questionResult = await client.query(`
+          INSERT INTO questions (quiz_id, question_text, order_index)
+          VALUES ($1, $2, $3)
+          RETURNING id
+        `, [quizId, questions[q].text, q]);
+        
+        const questionId = questionResult.rows[0].id;
+
+        for (let o = 0; o < questions[q].options.length; o++) {
+          await client.query(`
+            INSERT INTO answer_options (question_id, option_text, is_correct, order_index)
+            VALUES ($1, $2, $3, $4)
+          `, [questionId, questions[q].options[o], o === questions[q].correct, o]);
+        }
+      }
+    }
+
+    // Create quizzes for Python course
+    const pyLessonsResult = await client.query(`
+      SELECT l.id, l.title, c.id as course_id 
+      FROM lessons l 
+      JOIN sections s ON l.section_id = s.id 
+      JOIN courses c ON s.course_id = c.id 
+      WHERE c.slug = 'python-data-science' 
+      ORDER BY s.order_index, l.order_index 
+      LIMIT 5
+    `);
+
+    for (const lesson of pyLessonsResult.rows) {
+      const quizResult = await client.query(`
+        INSERT INTO quizzes (lesson_id, course_id, title, passing_score)
+        VALUES ($1, $2, $3, 70)
+        RETURNING id
+      `, [lesson.id, lesson.course_id, `Quiz: ${lesson.title}`]);
+      
+      const quizId = quizResult.rows[0].id;
+
+      const questions = [
+        { text: 'Comment déclarer une variable en Python?', options: ['x = 5', 'var x = 5', 'let x = 5', 'int x = 5'], correct: 0 },
+        { text: 'Quelle fonction affiche quelque chose en Python?', options: ['print()', 'echo()', 'console.log()', 'display()'], correct: 0 },
+        { text: 'Quel est le type dune liste en Python?', options: ['list', 'array', 'collection', 'group'], correct: 0 },
+      ];
+
+      for (let q = 0; q < questions.length; q++) {
+        const questionResult = await client.query(`
+          INSERT INTO questions (quiz_id, question_text, order_index)
+          VALUES ($1, $2, $3)
+          RETURNING id
+        `, [quizId, questions[q].text, q]);
+        
+        const questionId = questionResult.rows[0].id;
+
+        for (let o = 0; o < questions[q].options.length; o++) {
+          await client.query(`
+            INSERT INTO answer_options (question_id, option_text, is_correct, order_index)
+            VALUES ($1, $2, $3, $4)
+          `, [questionId, questions[q].options[o], o === questions[q].correct, o]);
+        }
+      }
+    }
+
     console.log('Seed completed successfully');
     console.log('Admin: admin@learning.com / Admin1234!');
     console.log('Instructor: instructor@learning.com / Instr1234!');

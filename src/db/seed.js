@@ -167,6 +167,43 @@ const seed = async () => {
       }
     }
 
+    // Sections and Lessons for Figma course
+    const figmaCourse = await client.query("SELECT id FROM courses WHERE slug = 'figma-design'");
+    if (figmaCourse.rows[0]) {
+      await client.query(`
+        INSERT INTO sections (course_id, title, order_index) VALUES 
+          ($1, 'Introduction a Figma', 1),
+          ($1, 'Composants et variantes', 2),
+          ($1, 'Prototypage', 3),
+          ($1, 'Projet final', 4)
+      `, [figmaCourse.rows[0].id]);
+
+      const figmaSections = await client.query("SELECT id FROM sections WHERE course_id = $1 ORDER BY order_index", [figmaCourse.rows[0].id]);
+      
+      const figmaLessons = [
+        ['Premiers pas avec Figma', 10, true],
+        ['Interface et outils', 12, true],
+        ['Creer des composants', 15, false],
+        ['Variantes et proprietes', 12, false],
+        ['Creer un prototype', 15, false],
+        ['Animations et transitions', 12, false],
+        ['Collaborer en equipe', 10, false],
+        ['Exporter et deliver', 8, false],
+      ];
+
+      for (let i = 0; i < figmaSections.rows.length; i++) {
+        const sectionId = figmaSections.rows[i].id;
+        const startIdx = i * 2;
+        const endIdx = Math.min(startIdx + 2, figmaLessons.length);
+        for (let j = startIdx; j < endIdx; j++) {
+          await client.query(`
+            INSERT INTO lessons (section_id, title, duration_minutes, is_preview, order_index, document_url)
+            VALUES ($1, $2, $3, $4, $5, 'https://www.youtube.com/embed/dQw4w9WgXcQ')
+          `, [sectionId, figmaLessons[j][0], figmaLessons[j][1], figmaLessons[j][2], j - startIdx + 1]);
+        }
+      }
+    }
+
     // Sections and Lessons for DevOps course
     const devopsCourse = await client.query("SELECT id FROM courses WHERE slug = 'devops-cloud'");
     if (devopsCourse.rows[0]) {

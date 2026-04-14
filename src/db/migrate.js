@@ -71,7 +71,7 @@ const createTables = async () => {
         section_id UUID REFERENCES sections(id) ON DELETE CASCADE,
         title VARCHAR(255) NOT NULL,
         description TEXT,
-        video_url TEXT,
+        document_url TEXT,
         duration_minutes INTEGER DEFAULT 0,
         order_index INTEGER NOT NULL,
         is_preview BOOLEAN DEFAULT FALSE,

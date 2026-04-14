@@ -1,23 +1,23 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { body, validationResult } = require('express-validator');
 const pool = require('../db/pool');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
 // POST /api/auth/register
-router.post('/register', [
-  body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 8 }),
-  body('first_name').trim().notEmpty(),
-  body('last_name').trim().notEmpty(),
-], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+router.post('/register', async (req, res) => {
+  const { email, password, name } = req.body;
 
-  const { email, password, first_name, last_name } = req.body;
+  if (!email || !password || !name) {
+    return res.status(400).json({ message: 'Email, mot de passe et nom requis' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ message: 'Le mot de passe doit faire au moins 8 caractères' });
+  }
+
   try {
     const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (exists.rows.length > 0) {
@@ -25,6 +25,10 @@ router.post('/register', [
     }
 
     const hashed = await bcrypt.hash(password, 10);
+    const nameParts = name.split(' ');
+    const first_name = nameParts[0];
+    const last_name = nameParts.slice(1).join(' ') || '';
+    
     const result = await pool.query(
       `INSERT INTO users (email, password, first_name, last_name)
        VALUES ($1, $2, $3, $4) RETURNING id, email, first_name, last_name, role`,
@@ -46,14 +50,13 @@ router.post('/register', [
 });
 
 // POST /api/auth/login
-router.post('/login', [
-  body('email').isEmail().normalizeEmail(),
-  body('password').notEmpty(),
-], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
+router.post('/login', async (req, res) => {
   const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email et mot de passe requis' });
+  }
+
   try {
     const result = await pool.query(
       'SELECT id, email, password, first_name, last_name, role, avatar_url FROM users WHERE email = $1 AND is_active = TRUE',

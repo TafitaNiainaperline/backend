@@ -9,7 +9,9 @@ router.get('/courses', authenticate, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT c.id, c.title, c.slug, c.thumbnail_url, c.level, c.duration_minutes,
-             e.enrolled_at, e.completed_at,
+             c.category_id, cat.name as category_name,
+             e.enrolled_at as enrollment_date,
+             CASE WHEN cert.id IS NOT NULL THEN TRUE ELSE FALSE END as has_certificate,
              COUNT(l.id) AS total_lessons,
              COUNT(lp.id) FILTER (WHERE lp.is_completed = TRUE) AS completed_lessons,
              CASE
@@ -19,11 +21,13 @@ router.get('/courses', authenticate, async (req, res) => {
              END AS progress_percent
       FROM enrollments e
       JOIN courses c ON e.course_id = c.id
+      LEFT JOIN categories cat ON c.category_id = cat.id
       LEFT JOIN sections s ON c.id = s.course_id
       LEFT JOIN lessons l ON s.id = l.section_id
       LEFT JOIN lesson_progress lp ON l.id = lp.lesson_id AND lp.user_id = e.user_id
+      LEFT JOIN certificates cert ON cert.course_id = c.id AND cert.user_id = e.user_id
       WHERE e.user_id = $1
-      GROUP BY c.id, e.enrolled_at, e.completed_at
+      GROUP BY c.id, cat.name, e.enrolled_at, cert.id
       ORDER BY e.enrolled_at DESC
     `, [req.user.id]);
 
@@ -86,7 +90,10 @@ router.get('/dashboard', authenticate, async (req, res) => {
       LEFT JOIN quiz_attempts qa ON u.id = qa.user_id
       LEFT JOIN lesson_progress lp ON u.id = lp.user_id
       WHERE u.id = $1
+      GROUP BY u.id
     `, [req.user.id]);
+
+    console.log('Dashboard stats query result:', stats.rows[0]);
 
     const recentActivity = await pool.query(`
       SELECT l.title AS lesson_title, c.title AS course_title, lp.completed_at
@@ -104,7 +111,7 @@ router.get('/dashboard', authenticate, async (req, res) => {
       recentActivity: recentActivity.rows,
     });
   } catch (err) {
-    console.error(err);
+    console.error('Dashboard error:', err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

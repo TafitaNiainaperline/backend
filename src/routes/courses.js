@@ -42,7 +42,29 @@ router.get('/', async (req, res) => {
 
   try {
     const result = await pool.query(query, params);
-    res.json({ courses: result.rows, page: Number(page), limit: Number(limit) });
+    
+    let courses = result.rows;
+    
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'plateforme_learning_jwt_secret_2024');
+        
+        const certResult = await pool.query(
+          'SELECT course_id FROM certificates WHERE user_id = $1',
+          [decoded.id]
+        );
+        const userCerts = new Set(certResult.rows.map(r => r.course_id));
+        
+        courses = courses.map(c => ({
+          ...c,
+          has_certificate: userCerts.has(c.id)
+        }));
+      } catch (e) {}
+    }
+    
+    res.json({ courses, page: Number(page), limit: Number(limit) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -71,10 +93,11 @@ router.get('/:slug', async (req, res) => {
              json_agg(
                json_build_object(
                  'id', l.id,
-                 'title', l.title,
-                 'duration_minutes', l.duration_minutes,
-                 'is_preview', l.is_preview,
-                 'order_index', l.order_index,
+'title', l.title,
+                  'document_url', l.document_url,
+                  'duration_minutes', l.duration_minutes,
+                  'is_preview', l.is_preview,
+                  'order_index', l.order_index,
                  'has_quiz', CASE WHEN q.id IS NOT NULL THEN TRUE ELSE FALSE END
                ) ORDER BY l.order_index
              ) FILTER (WHERE l.id IS NOT NULL) AS lessons
